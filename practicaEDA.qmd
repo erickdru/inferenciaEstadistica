@@ -1,0 +1,93 @@
+---
+title: "Práctica EDA"
+format: html
+---
+
+**1. Descripción y procedencia de los datos**
+
+El conjunto de datos seleccionado para este análisis es **Bike Sharing**, el cual proviene del repositorio de Machine Learning de la UCI. Estos datos recogen registros diarios y horarios de sistemas de alquiler de bicicletas en entornos urbanos, combinados con información meteorológica y registros temporales.
+
+**Observación:** Cada fila del conjunto de datos representa los registros de alquileres de bicicleta agrupados por hora (o día, según el archivo utilizado) junto con las condiciones climáticas y estacionales de ese momento.
+
+**Variables principales:**
+
+- 'instant': Índice de la observación.
+
+- 'dteday': Fecha del registro.
+
+- 'season': Estación del año (1: primavera, 2: verano, 3: otoño, 4: invierno).
+
+- 'yr': Año (0: 2011, 1: 2012). - 'mnth': Mes del año (1 a 12).
+
+- 'hr': Hora del día (0 a 23, en el dataset horario).
+
+- 'holiday': Si el día es festivo o no.
+
+- 'weekday': Día de la semana.
+
+- 'workingday': Si es día laborable (ni fin de semana ni festivo).
+
+- 'weathersit': Situación meteorológica (desde despejado hasta nieve/lluvia intensa).
+
+- 'temp': Temperatura normalizada.
+
+- 'hum': Humedad normalizada.
+
+- 'windspeed': Velocidad del viento normalizada.
+
+- 'cnt': Conteo total de bicicletas alquiladas (nuestra variable de interés principal).
+
+**Referencia:** Fanaee-T, Hadi, and Gama, Joao, "Event labeling combining ensemble detectors and background knowledge", \*Progress in Artificial Intelligence\* (2013): pp. 1-15.
+
+------------------------------------------------------------------------
+
+**2. Planteamiento inicial del EDA**
+
+El plan de trabajo para realizar el análisis exploratorio consta de las siguientes fases:
+
+[**1.**]{.underline} **Carga y preparación:** Importación de los datos en R, revisión de tipos de datos y verificación de valores perdidos ('NA').
+
+[**2.**]{.underline} **Análisis univariante:** Estudio estadístico y gráfico de las variables clave, especialmente la demanda de bicicletas ('cnt') y variables meteorológicas.
+
+[**3.**]{.underline} **Análisis bivariante y multivariante:** Investigación de cómo influyen factores como la hora del día, la temperatura, el tipo de día (laborable vs. fin de semana) o la estación del año en el volumen de alquileres.
+
+[**4.**]{.underline} **Conclusiones:** Síntesis de los hallazgos más relevantes y discusión sobre las limitaciones del análisis.
+
+------------------------------------------------------------------------
+
+**3. Preguntas de partida**
+
+Para guiar la exploración de los datos, nos planteamos las siguientes preguntas de investigación:
+
+[**1.**]{.underline} ¿Existen diferencias significativas en el uso de bicicletas compartidas entre los días laborables y los fines de semana?
+
+[**2.**]{.underline} ¿Cómo afecta la temperatura ambiental ('temp') y la situación meteorológica ('weathersit') al número de alquileres diarios u horarios?
+
+[**3.**]{.underline} ¿Cuáles son las horas del día de mayor demanda de bicicletas y cómo se comportan según la temporada del año?
+
+------------------------------------------------------------------------
+
+**4. Proceso de exploración**
+
+En este apartado realizamos la carga de los datos y la revisión inicial de la estructura.
+
+```{'''{r}
+'''
+# Cargamos la librería tidyverse
+library(tidyverse)
+
+# Cargamos el dataset por horas
+datos_bikes <- read.csv("hour.csv")
+
+# Vemos las primeras filas
+head(datos_bikes)
+
+### Limpieza y revisión de datos
+# Comprobamos dimensiones y valores perdidos
+dim(datos_bikes)
+sum(is.na(datos_bikes))
+
+# Resumen estadístico
+summary(datos_bikes)
+
+```
