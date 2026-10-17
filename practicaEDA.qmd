@@ -35,6 +35,12 @@ El conjunto de datos seleccionado para este análisis es **Bike Sharing**, el cu
 
 - 'windspeed': Velocidad del viento normalizada.
 
+NOTA IMPORTANTE: Las variables meteorológicas proporcionadas en el dataset original han sido normalizadas. Durante el análisis se documentará el tratamiento de estas variables escaladas entre 0 y 1.
+
+- 'casual': Número de usuarios ocasionales.
+
+- 'registered': Número de usuarios registrados.
+
 - 'cnt': Conteo total de bicicletas alquiladas (nuestra variable de interés principal).
 
 **Referencia:** Fanaee-T, Hadi, and Gama, Joao, "Event labeling combining ensemble detectors and background knowledge", \*Progress in Artificial Intelligence\* (2013): pp. 1-15.
@@ -65,29 +71,137 @@ Para guiar la exploración de los datos, nos planteamos las siguientes preguntas
 
 [**3.**]{.underline} ¿Cuáles son las horas del día de mayor demanda de bicicletas y cómo se comportan según la temporada del año?
 
+[**4.**]{.underline} ¿Usan las bicicletas a horas y días diferentes los usuarios registrados (que suelen ir a trabajar) y los usuarios casuales (que las usan para pasear)?
 ------------------------------------------------------------------------
 
 **4. Proceso de exploración**
 
-En este apartado realizamos la carga de los datos y la revisión inicial de la estructura.
+En este apartado realizamos la carga de los datos y su limpieza.
 
-```{'''{r}
-'''
+```{r}
 # Cargamos la librería tidyverse
 library(tidyverse)
 
 # Cargamos el dataset por horas
 datos_bikes <- read.csv("hour.csv")
 
-# Vemos las primeras filas
-head(datos_bikes)
-
-### Limpieza y revisión de datos
-# Comprobamos dimensiones y valores perdidos
+# 1. Comprobamos dimensiones y valores nulos
 dim(datos_bikes)
 sum(is.na(datos_bikes))
+# Observamos que no hay valores nulos 'NA' en el dataset
+
+# 2. Revisamos la coherencia interna
+# Verificamos si la uma de casual + registered siempre da cnt
+  sum(datos_bikes$casual + datos_bikes$registered != datos_bikes$cnt)
+# Observamos también que la variable 'cnt' es exactamente la suma de 'casual' y 'registered' en el     100% de los registros, asegurando así la integridad de los datos.
+
+# 3. Transformación de tipos de datos
+# Convertimos variables númericas que en realidad son categorías a factores
+datos_bikes <- datos_bikes |>
+  mutate(
+    season = factor(season, levels = 1:4, labels = c("Primavera", "Verano", "Otoño", "Invierno")),
+    holiday = factor(holiday, levels = c(0,1), labels = c("No", "Sí")),
+    workingday = factor( workingday, levels = c(0,1), labels = c("No", "Sí")),
+    weathersit = factor(weathersit, levels = 1:4)
+)
 
 # Resumen estadístico
 summary(datos_bikes)
-
 ```
+
+Gráfico 1: Para responder a la primera pregunta sobre si el uso general varía según el tipo de día, analizamos la media total de alquileres comparando días laborables frente a festivos/fines de semana.
+
+```{r}
+# Calculamos la media de alquileres totales (cnt) por tipo de día
+uso_por_dia <- datos_bikes |>
+  group_by(workingday) |>
+  summarise(Media_Total = mean(cnt))
+
+# Dibujamos un gráfico de barras sencillo
+ggplot(uso_por_dia, aes(x = workingday, y = Media_Total, fill = workingday)) +
+  geom_col(width = 0.5) +
+  labs(
+    title = "Media de bicicletas alquiladas por tipo de día",
+    x = "¿Es día laborable?",
+    y = "Media de alquileres totales",
+    fill = "Día laborable"
+  ) +
+  theme_minimal()
+```
+
+Gráfico 2: A continuación, evaluamos la segunda pregunta de investigación mediante un gráfico de dispersión (nube de puntos) para ver la posible relación directa entre la temperatura ambiental (normalizada) y la demanda total de bicicletas.
+
+```{r}
+# Dibujamos un gráfico de dispersión simple
+ggplot(datos_bikes, aes(x = temp, y = cnt)) +
+  geom_point(alpha = 0.2, color = "darkblue") + # alpha hace los puntos semitransparentes
+  # Añadimos una línea de tendencia general suavizada
+  geom_smooth(method = "lm", color = "red", se = FALSE) +
+  labs(
+    title = "Demanda de bicicletas según la temperatura",
+    subtitle = "Línea roja muestra la tendencia general de aumento",
+    x = "Temperatura (Normalizada de 0 a 1)",
+    y = "Total de bicicletas alquiladas"
+  ) +
+  theme_minimal()
+```
+
+Gráfico 3: Por último, para contestar a la tercera pregunta, analizamos cómo evoluciona la demanda media horaria y observamos si las estaciones del año modifican el comportamiento de los usuarios o simplemente el volumen total.
+
+```{r}
+# Calculamos la media de alquileres totales por hora y estación
+horas_estacion <- datos_bikes |>
+  group_by(hr, season) |>
+  summarise(Media_Total = mean(cnt), .groups = "drop")
+
+# Dibujamos una línea por cada estación del año
+ggplot(horas_estacion, aes(x = hr, y = Media_Total, color = season)) +
+  geom_line(linewidth = 1) +
+  scale_x_continuous(breaks = seq(0, 23, by = 4)) +
+  labs(
+    title = "Evolución horaria de la demanda según la estación del año",
+    x = "Hora del día",
+    y = "Media de bicicletas alquiladas",
+    color = "Estación"
+  ) +
+  theme_minimal()
+```
+
+Gráfico 4: En base a nuestra cuarta pregunta de investigación, vamos a explorar visualmente si los patrones de uso diario varían dependiendo del tipo de usuario y si es día laborable o no.
+
+```{r}
+# 1. Calculamos las medias agrupando por hora y tipo de día
+datos_sencillos <- datos_bikes |>
+  group_by(hr, workingday) |>
+  summarise(
+    Media_Casuales = mean(casual),
+    Media_Registrados = mean(registered),
+    .groups = "drop"
+  )
+
+# 2. Creamos el gráfico dibujando las dos líneas de forma directa
+ggplot(datos_sencillos, aes(x = hr)) +
+  # Dibujamos la línea de los casuales
+  geom_line(aes(y = Media_Casuales, color = "Casuales"), linewidth = 1.2) +
+  # Dibujamos encima la línea de los registrados
+  geom_line(aes(y = Media_Registrados, color = "Registrados"), linewidth = 1.2) +
+  # Partimos el gráfico en dos (laborables y festivos)
+  facet_wrap(~ workingday) +
+  # Añadimos los textos básicos
+  labs(
+    title = "Comparativa de usuarios por hora",
+    x = "Hora del día",
+    y = "Bicicletas alquiladas (Media)",
+    color = "Tipo de Usuario"
+  ) +
+  theme_minimal()
+```
+------------------------------------------------------------------------
+
+**6. Uso de Inteligencia Artificial**
+
+Declaramos el uso de un asistente de Inteligencia Artificial (LLM) durante el desarrollo de esta práctica. Su integración en el flujo de trabajo ha sido la siguiente:
+
+*   **Estructuración y revisión de sintaxis:** Se utilizó para revisar la correcta anidación de funciones en `dplyr` (uso del operador tubería `|>`) y corregir errores sintácticos menores en el código RMarkdown (como la ubicación de comas en la función `mutate`).
+*   **Apoyo en visualización:** Se utilizó como herramienta de consulta para optimizar la estética y legibilidad de los gráficos generados con `ggplot2` (ej. uso de `facet_wrap` para comparar rutinas de usuarios).
+*   **Verificación:** Todo el código proporcionado ha sido ejecutado, testado y validado en local por los integrantes del grupo usando RStudio e interpretando los gráficos que hemos generado.
