@@ -1,0 +1,295 @@
+---
+title: "Práctica Análisis Exploratorio de Datos: Bike Sharing"
+author: "Grupo 11: Carla Elena Musa, Noel Cámara Ruiz y Erick David Revelo Ushiña"
+format: 
+  html:
+    toc: true
+    toc-depth: 4
+    toc-title: "Índice de Contenidos"
+    number-sections: true
+    theme: cosmo
+    embed-resources: true
+---
+
+# Descripción y procedencia de los datos
+
+El conjunto de datos seleccionado para este análisis es **Bike Sharing**, el cual proviene del repositorio de Machine Learning de la UCI. Estos datos recogen registros diarios y horarios de sistemas de alquiler de bicicletas en entornos urbanos, combinados con información meteorológica y registros temporales.
+
+Los datos de *bike sharing* corresponden al registro histórico del sistema [Capital Bikeshare](https://capitalbikeshare.com/system-data) en Washington D.C. entre los años 2011 y 2012. El dataset cruza los alquileres de bicicletas con los datos meteorológicos extraídos de [FreeMeteo](https://www.freemeteo.com), además del calendario oficial de días festivos del gobierno de D.C. ([DCHR](https://dchr.dc.gov)).
+
+**Observación:** Cada fila del conjunto de datos representa los registros de alquileres de bicicleta agrupados por hora (o día, según el archivo utilizado) junto con las condiciones climáticas y estacionales de ese momento.
+
+## Diccionario de variables
+
+| Categoría | Variable | Descripción | Valores / Detalles |
+|:-----------------|:-----------------|:-----------------|:------------------|
+| **Temporal** | `instant` | Índice secuencial | Identificador único de la observación (1 a 17.379) |
+| **Temporal** | `dteday` | Fecha del registro | Formato AAAA-MM-DD |
+| **Temporal** | `season` | Estación del año | **1:** Invierno, **2:** Primavera, **3:** Verano, **4:** Otoño |
+| **Temporal** | `yr` | Año | **0:** 2011, **1:** 2012 |
+| **Temporal** | `mnth` | Mes del año | 1 a 12 |
+| **Temporal** | `hr` | Hora del día | 0 a 23 (disponible en el dataset horario) |
+| **Temporal** | `holiday` | Día festivo | **1:** Festivo en Washington D.C., **0:** No festivo |
+| **Temporal** | `weekday` | Día de la semana | **0:** Domingo, **1:** Lunes, ..., **6:** Sábado |
+| **Temporal** | `workingday` | Día laborable | **1:** Día laborable (ni fin de semana ni festivo), **0:** Día no laborable |
+| **Clima** | `weathersit` | Situación meteorológica | **1:** Despejado / Poco nublado<br>**2:** Niebla / Nublado<br>**3:** Lluvia ligera / Nieve ligera / Tormenta<br>**4:** Lluvia intensa / Nieve intensa / Niebla densa / Granizo |
+| **Clima** | `temp` | Temperatura normalizada | Valores divididos entre el máximo de 41 °C |
+| **Clima** | `atemp` | Sensación térmica normalizada | Valores divididos entre el máximo de 50 °C |
+| **Clima** | `hum` | Humedad relativa normalizada | Valores divididos entre 100 |
+| **Clima** | `windspeed` | Velocidad del viento normalizada | Valores divididos entre el máximo de 67 km/h |
+| **Demanda** | `casual` | Usuarios ocasionales | Alquileres de usuarios sin suscripción |
+| **Demanda** | `registered` | Usuarios registrados | Alquileres de usuarios abonados al sistema |
+| **Demanda** | `cnt` | Conteo total de bicicletas | Variable principal de interés ($\text{cnt} = \text{casual} + \text{registered}$) |
+
+**NOTA IMPORTANTE:** Las variables meteorológicas proporcionadas en el dataset original han sido normalizadas. Durante el análisis se documentará el tratamiento de estas variables escaladas entre 0 y 1.
+
+**Referencia:** Fanaee-T, Hadi, and Gama, Joao, "Event labeling combining ensemble detectors and background knowledge", *Progress in Artificial Intelligence* (2013): pp. 1-15.
+
+------------------------------------------------------------------------
+
+# Planteamiento inicial del EDA
+
+El plan de trabajo para realizar el análisis exploratorio consta de las siguientes fases:
+
+1.  **Carga y preparación:** Importación de los datos en R, revisión de tipos de datos y verificación de valores perdidos (`NA`).
+2.  **Análisis univariante:** Estudio estadístico y gráfico de las variables clave, especialmente la demanda de bicicletas (`cnt`) y variables meteorológicas.
+3.  **Análisis bivariante y multivariante:** Investigación de cómo influyen factores como la hora del día, la temperatura, el tipo de día (laborable vs. fin de semana) o la estación del año en el volumen de alquileres.ss
+4.  **Conclusiones:** Síntesis de los hallazgos más relevantes y discusión sobre las limitaciones del análisis.
+
+------------------------------------------------------------------------
+
+# Preguntas de partida
+
+Para guiar la exploración de los datos, nos planteamos las siguientes preguntas de investigación:
+
+1.  ¿Cómo se distribuye la variable `cnt`?
+2.  ¿Existen diferencias significativas en el uso de bicicletas compartidas entre los días laborables y los fines de semana?
+3.  ¿Cómo afecta la temperatura ambiental `temp` y la situación meteorológica `weathersit` al número de alquileres diarios u horarios?
+4.  ¿Cuáles son las horas del día de mayor demanda de bicicletas y cómo se comportan según la temporada del año?
+
+------------------------------------------------------------------------
+
+# Proceso de exploración
+
+En este apartado realizaremos la carga de datos, su limpieza y procesamiento.
+
+```{r}
+# Cargamos la librería tidyverse
+library(tidyverse)
+
+# Cargamos el dataset por horas
+datos_bikes <- read.csv("bike+sharing+dataset/hour.csv")
+
+# 1. Comprobamos dimensiones y valores nulos
+dim(datos_bikes)
+sum(is.na(datos_bikes))
+# Observamos que no hay valores nulos 'NA' en el dataset
+
+# 2. Revisamos la coherencia interna
+# Verificamos si la uma de casual + registered siempre da cnt
+  sum(datos_bikes$casual + datos_bikes$registered != datos_bikes$cnt)
+# Observamos también que la variable 'cnt' es exactamente la suma de 'casual' y 'registered' en el     100% de los registros, asegurando así la integridad de los datos.
+
+# 3. Transformación de tipos de datos
+# Convertimos variables númericas que en realidad son categorías a factores
+datos_bikes <- datos_bikes |>
+  mutate(
+    season = factor(season, levels = 1:4, labels = c("Primavera", "Verano", "Otoño", "Invierno")),
+    holiday = factor(holiday, levels = c(0,1), labels = c("No", "Sí")),
+    workingday = factor( workingday, levels = c(0,1), labels = c("No", "Sí")),
+    weathersit = factor(weathersit, levels = 1:4)
+)
+
+# Resumen estadístico
+summary(datos_bikes)
+```
+
+## Análisis Univariante: Distribución de la demanda
+
+```{r}
+#| label: univariante-cnt
+#| fig.width: 8
+#| fig.height: 4
+
+# Función para calcular la moda (pico de la densidad)
+calcular_moda <- function(x) {
+  d <- density(x, na.rm = TRUE)
+  d$x[which.max(d$y)]
+}
+
+media   <- mean(datos_bikes$cnt, na.rm = TRUE)
+mediana <- median(datos_bikes$cnt, na.rm = TRUE)
+moda    <- calcular_moda(datos_bikes$cnt)
+
+indicadores <- data.frame(
+  estadistico = factor(
+    c("Media", "Mediana", "Moda"),
+    levels = c("Media", "Mediana", "Moda")
+  ),
+  valor = c(media, mediana, moda)
+)
+
+etiquetas <- c(
+  sprintf("Media (%.1f)", media),
+  sprintf("Mediana (%.1f)", mediana),
+  sprintf("Moda (%.1f)", moda)
+)
+
+ggplot(datos_bikes, aes(x = cnt)) +
+  geom_histogram(
+    bins = 30, boundary = 0, closed = "left",
+    fill = "#2b5c8f", color = "white", alpha = 0.75
+  ) +
+  geom_vline(
+    data = indicadores,
+    aes(xintercept = valor, color = estadistico, linetype = estadistico),
+    linewidth = 1.1,
+    key_glyph = "path"          
+  ) +
+  scale_color_manual(
+    name = "Indicador",
+    values = c("Media" = "#e63946", "Mediana" = "#f4a300", "Moda" = "#2ecc71"),
+    labels = etiquetas
+  ) +
+  scale_linetype_manual(
+    name = "Indicador",
+    values = c("Media" = "dashed", "Mediana" = "solid", "Moda" = "dotted"),
+    labels = etiquetas
+  ) +
+  labs(
+    title = "Distribución de Alquileres Horarios Totales (cnt)",
+    x = "Bicicletas alquiladas por hora",
+    y = "Frecuencia"
+  ) +
+  theme_minimal() +
+  theme(
+    legend.position = "right",
+    legend.key.width = unit(1.5, "cm")
+  )
+```
+
+**Interpretación:** La demanda presenta una fuerte asimetría positiva, como muestra la relación moda (19,3) \< mediana (142,0) \< media (189,5): la mayoría de las horas registran pocos alquileres, mientras que unas pocas concentran unos valores muy elevados que desplazan la media hacia la derecha. Por ello, la mediana resulta más representativa de la demanda típica.
+
+## Análisis Bivariante y Multivariante
+
+### Gráfico 1: Media de alquileres en días laborales y no laborales
+
+Para responder a la primera pregunta sobre si el uso general varía según el tipo de día, analizamos la media total de alquileres comparando días laborables frente a festivos/fines de semana.
+
+```{r}
+# Calculamos la media de alquileres totales (cnt) por tipo de día
+uso_por_dia <- datos_bikes |>
+  group_by(workingday) |>
+  summarise(Media_Total = mean(cnt))
+
+# Dibujamos un gráfico de barras sencillo
+ggplot(uso_por_dia, aes(x = workingday, y = Media_Total, fill = workingday)) +
+  geom_col(width = 0.5) +
+  labs(
+    title = "Media de bicicletas alquiladas por tipo de día",
+    x = "¿Es día laborable?",
+    y = "Media de alquileres totales",
+    fill = "Día laborable"
+  ) +
+  theme_minimal()
+```
+
+### Gráfico 2: Posible relación entre temperatura ambiental y demanda de bicicletas
+
+A continuación, evaluamos la segunda pregunta de investigación mediante un gráfico de dispersión (nube de puntos) para ver la posible relación directa entre la temperatura ambiental (normalizada) y la demanda total de bicicletas.
+
+```{r}
+# Dibujamos un gráfico de dispersión simple
+ggplot(datos_bikes, aes(x = temp, y = cnt)) +
+  geom_point(alpha = 0.2, color = "darkblue") + # alpha hace los puntos semitransparentes
+  # Añadimos una línea de tendencia general suavizada
+  geom_smooth(method = "lm", color = "red", se = FALSE) +
+  labs(
+    title = "Demanda de bicicletas según la temperatura",
+    subtitle = "Línea roja muestra la tendencia general de aumento",
+    x = "Temperatura (Normalizada de 0 a 1)",
+    y = "Total de bicicletas alquiladas"
+  ) +
+  theme_minimal()
+```
+
+### Gráfico 3: Evolución de la demanda media horaria en las estaciones del año
+
+Por último, para contestar a la tercera pregunta, analizamos cómo evoluciona la demanda media horaria y observamos si las estaciones del año modifican el comportamiento de los usuarios o simplemente el volumen total.
+
+```{r}
+# Calculamos la media de alquileres totales por hora y estación
+horas_estacion <- datos_bikes |>
+  group_by(hr, season) |>
+  summarise(Media_Total = mean(cnt), .groups = "drop")
+
+# Dibujamos una línea por cada estación del año
+ggplot(horas_estacion, aes(x = hr, y = Media_Total, color = season)) +
+  geom_line(linewidth = 1) +
+  scale_x_continuous(breaks = seq(0, 23, by = 4)) +
+  labs(
+    title = "Evolución horaria de la demanda según la estación del año",
+    x = "Hora del día",
+    y = "Media de bicicletas alquiladas",
+    color = "Estación"
+  ) +
+  theme_minimal()
+```
+
+### Gráfico 4: Patrones entre tipo de usuario y horario laborable
+
+### En base a nuestra cuarta pregunta de investigación, vamos a explorar visualmente si los patrones de uso diario varían dependiendo del tipo de usuario y si es día laborable o no.
+
+```{r}
+# 1. Calculamos las medias agrupando por hora y tipo de día
+datos_sencillos <- datos_bikes |>
+  group_by(hr, workingday) |>
+  summarise(
+    Media_Casuales = mean(casual),
+    Media_Registrados = mean(registered),
+    .groups = "drop"
+  )
+
+# 2. Creamos el gráfico dibujando las dos líneas de forma directa
+ggplot(datos_sencillos, aes(x = hr)) +
+  # Dibujamos la línea de los casuales
+  geom_line(aes(y = Media_Casuales, color = "Casuales"), linewidth = 1.2) +
+  # Dibujamos encima la línea de los registrados
+  geom_line(aes(y = Media_Registrados, color = "Registrados"), linewidth = 1.2) +
+  # Partimos el gráfico en dos (laborables y festivos)
+  facet_wrap(~ workingday) +
+  # Añadimos los textos básicos
+  labs(
+    title = "Comparativa de usuarios por hora",
+    x = "Hora del día",
+    y = "Bicicletas alquiladas (Media)",
+    color = "Tipo de Usuario"
+  ) +
+  theme_minimal()
+```
+
+------------------------------------------------------------------------
+
+# Principales hallazgos y conclusiones
+
+Este análisis exploratorio realizado sobre el *dataset* de **Bikesharing** nos ha permitido comprender las dinámicas de alquileres de bicicletas en Washington D.C. durante los años 2011 y 2012. A través de distintos factores como el calendario, las condiciones meteorológicas y el perfil de los usuarios, hemos identificado patrones de uso que resultan clave para entender este servicio.
+
+- **Gráfico 1:** En primer lugar, hemos observado que la demanda de alquiler de bicicletas se mantiene equilibrada independientemente de si es un día laboral o no. Aunque es cierto que existe una leve superioridad en el volumen de alquileres durante los días laborales frente a festivos y fines de semana, este volumen tan similar apunta a que la verdadera diferencia entre estos dos días recae en quién y cuándo se alquilan las bicicletas.
+
+- **Gráfico 2:** El clima actúa como un factor fundamental para los usuarios. Se observa una clara correlación entre la temperatura ambiental y la demanda diaria de bicicletas. Esto nos hace suponer que, a medida que aumentan las temperaturas, el volumen total de alquileres crece, y que el frío es uno de los principales motivos por los que el usuario podría optar por otro medio de transporte.
+
+- **Gráfico 3:** Al evaluar esta variable `cnt`, la estación del año afecta claramente al volumen total de alquileres, siendo los meses de verano y otoño los de mayor actividad, frente a la caída de usuarios en invierno. Sin embargo, resulta interesante que, pese a la estación del año, la distribución horaria de alquileres mantiene su estructura a lo largo del día, lo que indica que las rutinas diarias de movilidad son estables y el clima solo determina el volumen de personas dispuestas a realizar dichos trayectos.
+
+- **Gráfico 4:** Finalmente, destaca la diferencia entre tipos de usuarios (casuales y registrados). Los usuarios registrados presentan unos picos de alquileres asociados a jornadas laborales o académicas, generando estos picos a primera hora de la mañana y al final de la tarde durante los días laborales. Por el contrario, los usuarios casuales prevalecen en el sistema durante los fines de semana y festivos, concentrando su volumen de demanda al mediodía, orientando el uso hacia el ocio y turismo.
+
+Como conclusión, estos hallazgos sugieren que el servicio de alquiler de bicicletas cubre dos necesidades completamente distintas. Por un lado, funciona como transporte estructurado para usuarios registrados entre semana, y como servicio de ocio y turismo para usuarios casuales. Por su parte, la meteorología y la estación del año actúan como reguladores del volumen total de alquileres, disminuyendo o impulsando la demanda sin alterar los patrones a lo largo del día.
+
+------------------------------------------------------------------------
+
+# Uso de Inteligencia Artificial
+
+Declaramos el uso de un asistente de Inteligencia Artificial (LLM) durante el desarrollo de esta práctica. Su integración en el flujo de trabajo ha sido la siguiente:
+
+- **Estructuración y revisión de sintaxis:** Se utilizó para revisar la correcta anidación de funciones en `dplyr` (uso del operador tubería `|>`) y corregir errores sintácticos menores en el código RMarkdown (como la ubicación de comas en la función `mutate`).
+- **Apoyo en visualización:** Se utilizó como herramienta de consulta para optimizar la estética y legibilidad de los gráficos generados con `ggplot2` (ej. uso de `facet_wrap` para comparar rutinas de usuarios).
+- **Verificación:** Todo el código proporcionado ha sido ejecutado, testado y validado en local por los integrantes del grupo usando RStudio e interpretando los gráficos que hemos generado.
